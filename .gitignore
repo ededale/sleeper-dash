@@ -127,3 +127,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+/.idea/vcs.xml
+/config
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/modules.xml
+/out.csv
+/.idea/sleeper-dash.iml
+/players_27_09_22.json
+/.idea/misc.xml
+
+# outputs
+/*.csv
+/*.json

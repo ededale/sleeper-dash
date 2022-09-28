@@ -2,44 +2,45 @@ import requests
 import pandas as pd
 import json
 from datetime import date
-from os.path import exists
+import os.path
+from pathlib import Path, PurePath
 
-week = str(3)
+global league_id
+global week
 
 
 def get_json_users():
-    global path
-    path = "https://api.sleeper.app/v1/league/" + leagueId + "/users"
-    path_roster = "https://api.sleeper.app/v1/league/" + leagueId + "/rosters"
+    path = "https://api.sleeper.app/v1/league/" + league_id + "/users"
+    path_roster = "https://api.sleeper.app/v1/league/" + league_id + "/rosters"
     users = requests.get(path).text
     roster = requests.get(path_roster).text
-    jsonUsers = json.loads(users)
-    jsonRoster = json.loads(roster)
-    return jsonUsers, jsonRoster
+    json_users = json.loads(users)
+    json_roster = json.loads(roster)
+    return json_users, json_roster
 
 
-def get_roster_id(userId, jsonRoster):
-    for roster in jsonRoster:
+def get_roster_id(userId, json_roster):
+    for roster in json_roster:
         if roster["owner_id"] == userId:
             return roster["roster_id"]
 
     # This is for if the owner of the team is not the original owner
-    for roster in jsonRoster:
+    for roster in json_roster:
         if roster["co_owners"]:
             for owner in roster["co_owners"]:
                 if userId == owner:
                     return roster["roster_id"]
 
 
-def transform_json_dataframe_users(jsonUsers, jsonRoster):
+def transform_json_dataframe_users(json_users, json_roster):
     userIds = []
     displayNames = []
     teamNames = []
     rosterIds = []
-    for user in jsonUsers:
+    for user in json_users:
         userId = user["user_id"]
         userIds.append(userId)
-        rosterIds.append(get_roster_id(userId, jsonRoster))
+        rosterIds.append(get_roster_id(userId, json_roster))
         displayNames.append(user["display_name"])
         try:
             teamNames.append(user["metadata"]["team_name"])
@@ -79,7 +80,7 @@ def transform_json_dataframe_matchups(jsonMatchups):
 
 
 def get_json_matchups():
-    path = "https://api.sleeper.app/v1/league/" + leagueId + "/matchups/" + week
+    path = "https://api.sleeper.app/v1/league/" + league_id + "/matchups/" + week
     jsonMatchups = json.loads(requests.get(path).text)
     return jsonMatchups
 
@@ -92,15 +93,13 @@ def download_players(filename):
 
 
 def get_json_players():
-    today = date.today()
-    today = today.strftime("%d_%m_%y")
-    filename = "players_" + today + ".json"
-    if not exists(filename):
+    file_players = PurePath("players_", get_today(), ".json")
+    if not os.path.exists(file_players):
         print("downloading players")
-        download_players(filename)
-    with open(filename, 'r') as j:
+        download_players(file_players)
+    with open(file_players, 'r') as j:
         players = json.loads(j.read())
-        return players
+    return players
 
 
 def transform_json_dataframe_players(jsonPlayers):
@@ -125,19 +124,37 @@ def transform_json_dataframe_players(jsonPlayers):
     return pd.DataFrame(players)
 
 
-if __name__ == "__main__":
+def configure_properties():
+    global league_id, week
     with open("config") as config:
-        leagueId = config.readline()
+        league_id = config.readline().strip()
+        week = config.readline().strip()
 
-    jsonUsers, jsonRoster = get_json_users()
-    dfUsers = transform_json_dataframe_users(jsonUsers, jsonRoster)
+
+def merge_dataframes(df_users, df_matchups, df_players):
+    df_users_matchups = pd.merge(df_users, df_matchups, how="left", on="roster_id")
+    return pd.merge(df_users_matchups, df_players, how="left", on="player_id")
+
+
+def get_today():
+    today = date.today()
+    today = today.strftime('%d_%m_%y')
+
+
+if __name__ == "__main__":
+    configure_properties()
+
+    json_users, json_roster = get_json_users()
+    df_users = transform_json_dataframe_users(json_users, json_roster)
 
     jsonMatchups = get_json_matchups()
-    dfMatchups = transform_json_dataframe_matchups(jsonMatchups)
+    df_matchups = transform_json_dataframe_matchups(jsonMatchups)
 
     jsonPlayers = get_json_players()
-    dfPlayers = transform_json_dataframe_players(jsonPlayers)
+    df_players = transform_json_dataframe_players(jsonPlayers)
 
-    dfUsersMatchups = pd.merge(dfUsers, dfMatchups, how="left", on="roster_id")
-    dfScores = pd.merge(dfUsersMatchups, dfPlayers, how="left", on="player_id")
-    dfScores.to_csv('out.csv', index=False)
+    df_scores = merge_dataframes(df_users, df_matchups, df_players)
+
+    output = PurePath("out_", get_today(), ".csv")
+
+    df_scores.to_csv(output, index=False)
