@@ -3,7 +3,6 @@ import pandas as pd
 import json
 from datetime import date
 import os.path
-from pathlib import PurePath
 
 global league_id
 global week
