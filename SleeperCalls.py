@@ -4,7 +4,7 @@ import json
 from datetime import date
 from os.path import exists
 
-week = str(1)
+week = str(3)
 
 
 def get_json_users():
